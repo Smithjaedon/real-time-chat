@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from typing import Annotated
+import json
 
 from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, JSON
 from sqlalchemy.testing import exclude
 import uuid
 from sqlmodel import SQLModel, Field, Session, create_engine, select, ForeignKey
@@ -71,22 +72,22 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[list[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, room_id: int):
+    async def connect(self, websocket: WebSocket, room_id: uuid.UUID):
         await websocket.accept()
         if room_id not in self.active_connections:
             self.active_connections[room_id] = []
         self.active_connections[room_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket, room_id: int):
+    def disconnect(self, websocket: WebSocket, room_id: uuid.UUID):
         self.active_connections[room_id].remove(websocket)
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
 
-    async def broadcast(self, message: str, room_id: int , excludes: WebSocket = None):
+    async def broadcast(self, payload: str, room_id: uuid.UUID , excludes: WebSocket = None):
         for connection in self.active_connections.get(room_id, []):
             if connection != excludes:
-                await connection.send_text(message)
+                await connection.send_text(payload)
 
 
 manager = ConnectionManager()
@@ -124,13 +125,33 @@ async def create_user(username: str,session: SessionDep) -> User:
     session.refresh(user)
     return user
 
+@app.post('/create_room')
+async def creat_room(session: SessionDep) -> Room:
+    room = Room()
+    session.add(room)
+    session.commit()
+    session.refresh(room)
+    return room
+
+@app.get('/get_rooms')
+async def get_rooms(session: SessionDep) -> list[Room]:
+    rooms = session.exec(select(Room)).all()
+    return list(rooms)
+
+@app.get('/get_room')
+async def get_room(room_id: uuid.UUID, session: SessionDep) -> Room:
+    room: Room | None = session.exec(select(Room).where(Room.id==room_id)).first()
+    if not Room:
+        raise Exception("Room does not exist")
+    return room
+
 @app.websocket("/ws/{room_id}/{client_id}")
-async def websocket_room_endpoint(websocket: WebSocket, client_id: int, room_id: int):
+async def websocket_room_endpoint(websocket: WebSocket, client_id: uuid.UUID, room_id: uuid.UUID, session: SessionDep):
     await manager.connect(websocket, room_id)
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.broadcast(f"Client #{client_id} says: {data}", room_id, excludes=websocket)
+            await manager.broadcast(data, room_id, excludes=websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)
         await manager.broadcast(f"Client #{client_id} left the chat", room_id)
