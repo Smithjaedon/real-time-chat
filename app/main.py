@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy import DateTime
 from sqlalchemy.testing import exclude
-from sqlmodel import SQLModel, Field, Session, create_engine, select
+import uuid
+from sqlmodel import SQLModel, Field, Session, create_engine, select, ForeignKey
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
@@ -11,6 +14,23 @@ class Note(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str = Field(index=True)
     content: str
+
+class User(SQLModel, table=True):
+    id: uuid.UUID | None = Field(default_factory=uuid.uuid4, primary_key=True)
+    username: str = Field(max_length=100, unique=True)
+
+class Room(SQLModel, table=True):
+    id: uuid.UUID | None = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_type=DateTime)
+    name: str | None = None
+
+class Message(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    content: str
+    room: int = Field(foreign_key="room.id")
+    user: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_type=DateTime)
+
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -82,6 +102,27 @@ async def create_note(note: Note, session: SessionDep) -> Note:
     session.commit()
     session.refresh(note)
     return note
+
+@app.get('/users')
+async def get_users(session: SessionDep) -> list[User]:
+    users = session.exec(select(User)).all()
+    return list(users)
+
+@app.get('/user/{username}')
+async def get_user(username:  str,session: SessionDep) -> User:
+    user: User | None = session.exec(select(User).where(User.username==username)).first()
+    if not user:
+        raise Exception("User does not exist")
+    return user
+
+
+@app.post('/users')
+async def create_user(username: str,session: SessionDep) -> User:
+    user = User(username=username)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 @app.websocket("/ws/{room_id}/{client_id}")
 async def websocket_room_endpoint(websocket: WebSocket, client_id: int, room_id: int):
