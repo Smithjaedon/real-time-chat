@@ -6,7 +6,7 @@ A real-time chat application built with FastAPI, WebSockets, and SQLite. This pr
 
 ## 🎥 Demo
 
-> _[Add your demo link or video here]_
+> _[[Real Time Chat Demo](https://www.youtube.com/watch?v=ekz3ptv_Mzo)]_
 
 ---
 
