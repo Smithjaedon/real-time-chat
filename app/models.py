@@ -14,7 +14,6 @@ class User(SQLModel, table=True):
     model_config = ConfigDict(from_attributes=True)
 
 
-
 class Room(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

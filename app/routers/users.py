@@ -4,10 +4,6 @@ from sqlmodel import select
 from app.models import User
 
 
-
-
-
-
 router = APIRouter()
 
 @router.get('/users')

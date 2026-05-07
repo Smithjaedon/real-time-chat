@@ -7,8 +7,6 @@ from app.schemas import RoomModalRead, RoomSidebarRead
 import uuid
 
 
-
-
 router = APIRouter()
 
 @router.patch('/change_room_name')

@@ -6,7 +6,6 @@ from app.models import Message, Room
 from app.schemas import RoomRead
 import uuid
 
-
 router = APIRouter()
 
 @router.get('/get_messages')
